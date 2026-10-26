@@ -4,6 +4,40 @@ on:
   pull_request:
 
 jobs:
+  # The unit tests and the tracking regression test run on the PC (see tests/README.md), and the share of the code they run
+  # must not fall below the minimum. A change that lowers it too far fails here.
+  unit-tests:
+    name: Unit tests and coverage
+    runs-on: ubuntu-latest
+    env:
+      # Minimum share of lines run by the unit tests, in percent. Raise it as tests are added.
+      MINIMUM_COVERAGE: 95
+    steps:
+      - name: Checkout OpenFIRE-Firmware
+        uses: actions/checkout@v4
+        with:
+          # the board presets of the firmware (OpenFIREmain/boards) are a submodule, and the firmware's tests need them
+          submodules: true
+
+      - name: Install gcovr
+        run: sudo apt-get update && sudo apt-get install -y gcovr
+
+      # g++ builds and runs all of them: advanced, classic, board drivers and the firmware (as a Pico and a Pico 2), the last
+      # with AddressSanitizer and UndefinedBehaviorSanitizer, then the golden-hash test of the tracking
+      - name: Run the tests
+        run: tests/run_all.sh
+
+      - name: Measure coverage (at least ${{ env.MINIMUM_COVERAGE }}%)
+        run: tests/unit/coverage.sh --min ${{ env.MINIMUM_COVERAGE }} --html coverage-report
+
+      - name: Upload coverage report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Unit test coverage report
+          path: coverage-report
+          if-no-files-found: ignore
+
   arduino-build:
     name: ${{ matrix.name }}
     runs-on: ubuntu-latest
