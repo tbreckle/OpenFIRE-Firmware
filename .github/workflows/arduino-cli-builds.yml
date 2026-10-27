@@ -14,7 +14,7 @@ jobs:
       MINIMUM_COVERAGE: 95
     steps:
       - name: Checkout OpenFIRE-Firmware
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           # the board presets of the firmware (OpenFIREmain/boards) are a submodule, and the firmware's tests need them
           submodules: true
@@ -32,7 +32,7 @@ jobs:
 
       - name: Upload coverage report
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: Unit test coverage report
           path: coverage-report
@@ -110,7 +110,7 @@ jobs:
 
     steps:
       - name: Checkout OpenFIRE-Firmware
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: true
           
@@ -130,7 +130,18 @@ jobs:
       - name: Get short SHA
         id: get-short-sha
         run: echo "id=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-        
+
+      # the version is defined in OpenFIREDefines.h, and is used in the file name to tell local copies apart
+      - name: Get firmware version
+        id: get-version
+        run: |
+          version=$(sed -n 's/^#define OPENFIRE_VERSION[[:space:]]\+\([0-9][0-9.]*\).*/\1/p' OpenFIREmain/OpenFIREDefines.h)
+          if [ -z "$version" ]; then
+            echo "Could not read OPENFIRE_VERSION from OpenFIREmain/OpenFIREDefines.h" >&2
+            exit 1
+          fi
+          echo "version=$version" >> $GITHUB_OUTPUT
+
       - name: Compile for ${{ matrix.name }}
         run: >
           arduino-cli compile -e
@@ -142,12 +153,12 @@ jobs:
           ${{matrix.extra_flags}}'
         
       - name: Rename build file
-        run: cp ${{github.workspace}}/OpenFIREmain/build/rp2040.rp2040.${{matrix.fqbn}}/OpenFIREmain.ino.uf2 OpenFIREfw.${{ matrix.pretty }}.uf2
+        run: cp ${{github.workspace}}/OpenFIREmain/build/rp2040.rp2040.${{matrix.fqbn}}/OpenFIREmain.ino.uf2 OpenFIREfw.${{ matrix.pretty }}.v${{ steps.get-version.outputs.version }}-${{ steps.get-short-sha.outputs.id }}.uf2
         
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
-          path: OpenFIREfw.${{ matrix.pretty }}.uf2
-          name: OpenFIREfw - ${{ matrix.name }}
+          path: OpenFIREfw.${{ matrix.pretty }}.v${{ steps.get-version.outputs.version }}-${{ steps.get-short-sha.outputs.id }}.uf2
+          name: OpenFIREfw - ${{ matrix.name }} - v${{ steps.get-version.outputs.version }}-${{ steps.get-short-sha.outputs.id }}
           if-no-files-found: error
           
